@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Propuesta - Voz del Ciudadano</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Voz del Ciudadano</h1>
+        <nav>
+            <a href="index.html">Inicio</a>
+            <a href="crear.html">Nueva Propuesta</a>
+            <a href="congreso.html">Panel del Congreso</a>
+        </nav>
+    </header>
+    <main>
+        <div id="detalle"><p>Cargando...</p></div>
+    </main>
+    <script>
+        const API = 'http://localhost:8000';
+        const id = new URLSearchParams(window.location.search).get('id');
+
+        if (!id) window.location.href = 'index.html';
+
+        async function cargar() {
+            const res = await fetch(`${API}/proposals/${id}`);
+            if (!res.ok) { document.getElementById('detalle').innerHTML = '<p class="alerta error">Propuesta no encontrada.</p>'; return; }
+            const p = await res.json();
+            renderDetalle(p);
+        }
+
+        function renderDetalle(p) {
+            const congelada = p.status === 'congelada';
+            const estructura = p.estructura ? p.estructura.elementos.map(e =>
+                `<div class="item-lista">[${e.tipo}] ${e.contenido}</div>`
+            ).join('') : '';
+
+            document.getElementById('detalle').innerHTML = `
+                <div class="seccion">
+                    <h2>${p.title} <span class="tag ${p.status}">${p.estado_legible}</span></h2>
+                    <p style="margin:12px 0;line-height:1.6">${p.description}</p>
+                    <p>Proponente: <strong>${p.creator_name}</strong></p>
+                    <p>Creada: ${new Date(p.created_at).toLocaleDateString('es-PE')} &nbsp;|&nbsp; Plazo: ${new Date(p.deadline).toLocaleDateString('es-PE')}</p>
+                    <div class="barra" style="margin-top:12px">
+                        <div class="progreso" style="width:${Math.min(p.progreso_firmas,100)}%"></div>
+                    </div>
+                    <p>${p.signature_count} firmas &nbsp;|&nbsp; ${p.progreso_firmas}% &nbsp;|&nbsp; Faltan: ${p.firmas_restantes}</p>
+                    ${congelada ? `<p style="margin-top:10px">Hash SHA-256:</p><div class="hash">${p.frozen_hash}</div>` : ''}
+                </div>
+
+                ${estructura ? `<div class="seccion"><h3>Estructura de la propuesta (Composite)</h3>${estructura}</div>` : ''}
+
+                ${!congelada ? `
+                <div class="seccion">
+                    <h3>Firmar Propuesta</h3>
+                    <form id="form-firma">
+                        <label>Nombre completo</label>
+                        <input type="text" id="citizen_name" required>
+                        <label>DNI</label>
+                        <input type="text" id="citizen_id" maxlength="8" required>
+                        <button type="submit">Firmar</button>
+                    </form>
+                    <div id="msg-firma"></div>
+                </div>
+
+                <div class="seccion">
+                    <h3>Agregar Comentario</h3>
+                    <form id="form-comentario">
+                        <label>Tu nombre</label>
+                        <input type="text" id="author_name" required>
+                        <label>Comentario</label>
+                        <textarea id="content" rows="3" required></textarea>
+                        <button type="submit">Enviar Comentario</button>
+                    </form>
+                    <div id="msg-comentario"></div>
+                </div>
+
+                <div class="seccion">
+                    <h3>Adjuntar Recurso (PDF, imagen, video, audio)</h3>
+                    <form id="form-adjunto">
+                        <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mp3" required>
+                        <button type="submit">Subir Adjunto</button>
+                    </form>
+                    <div id="msg-adjunto"></div>
+                </div>
+                ` : `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más firmas, comentarios ni adjuntos.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>`}
+            `;
+
+            if (!congelada) {
+                document.getElementById('form-firma').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const res = await fetch(`${API}/proposals/${id}/firmas`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ citizen_name: document.getElementById('citizen_name').value, citizen_id: document.getElementById('citizen_id').value })
+                    });
+                    const data = await res.json();
+                    const msg = document.getElementById('msg-firma');
+                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje} — Total: ${data.total_firmas}</div>`; cargar(); }
+                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
+                });
+
+                document.getElementById('form-comentario').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const res = await fetch(`${API}/proposals/${id}/comentarios`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ author_name: document.getElementById('author_name').value, content: document.getElementById('content').value })
+                    });
+                    const data = await res.json();
+                    const msg = document.getElementById('msg-comentario');
+                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}</div>`; cargar(); }
+                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
+                });
+
+                document.getElementById('form-adjunto').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData();
+                    formData.append('archivo', document.getElementById('archivo').files[0]);
+                    const res = await fetch(`${API}/proposals/${id}/adjuntos`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    const msg = document.getElementById('msg-adjunto');
+                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}: ${data.filename}</div>`; cargar(); }
+                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
+                });
+            }
+        }
+
+        cargar();
+    </script>
+</body>
+</html>

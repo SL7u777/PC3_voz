@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Voz del Ciudadano</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Voz del Ciudadano</h1>
+        <nav>
+            <a href="index.html">Inicio</a>
+            <a href="crear.html">Nueva Propuesta</a>
+            <a href="congreso.html">Panel del Congreso</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Propuestas Legislativas Ciudadanas</h2>
+        <div id="propuestas"><p>Cargando...</p></div>
+    </main>
+    <script>
+        const API = 'http://localhost:8000';
+
+        async function cargar() {
+            const cont = document.getElementById('propuestas');
+            try {
+                const res = await fetch(`${API}/proposals/`);
+                const data = await res.json();
+                if (!data.length) {
+                    cont.innerHTML = '<p style="color:#a0aec0">No hay propuestas registradas. <a href="crear.html">Crear una</a>.</p>';
+                    return;
+                }
+                cont.innerHTML = data.map(p => `
+                    <div class="card ${p.status}">
+                        <h3>
+                            <a href="propuesta.html?id=${p.id}">${p.title}</a>
+                            <span class="tag ${p.status}">${p.estado_legible}</span>
+                        </h3>
+                        <p>Proponente: ${p.creator_name}</p>
+                        <div class="barra">
+                            <div class="progreso" style="width:${Math.min(p.progreso_firmas, 100)}%"></div>
+                        </div>
+                        <p>${p.signature_count} firmas &nbsp;|&nbsp; ${p.progreso_firmas}% completado &nbsp;|&nbsp; Faltan: ${p.firmas_restantes}</p>
+                        <p>Plazo: ${new Date(p.deadline).toLocaleDateString('es-PE')}</p>
+                    </div>
+                `).join('');
+            } catch {
+                cont.innerHTML = '<p class="alerta error">No se pudo conectar con el servidor.</p>';
+            }
+        }
+
+        cargar();
+    </script>
+</body>
+</html>

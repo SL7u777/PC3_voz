@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Nueva Propuesta - Voz del Ciudadano</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Voz del Ciudadano</h1>
+        <nav>
+            <a href="index.html">Inicio</a>
+            <a href="crear.html">Nueva Propuesta</a>
+            <a href="congreso.html">Panel del Congreso</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Crear Nueva Propuesta Legislativa</h2>
+        <div class="seccion">
+            <form id="form-propuesta">
+                <label>Título de la propuesta</label>
+                <input type="text" id="title" placeholder="Ej: Ley de protección del agua potable" required>
+
+                <label>Exposición de motivos</label>
+                <textarea id="description" rows="6" placeholder="Describa el objetivo, justificación y alcance de la propuesta..." required></textarea>
+
+                <label>Colectivo o proponente</label>
+                <input type="text" id="creator_name" placeholder="Nombre del colectivo civil" required>
+
+                <button type="submit">Crear Propuesta</button>
+            </form>
+            <div id="mensaje"></div>
+        </div>
+    </main>
+    <script>
+        const API = 'http://localhost:8000';
+
+        document.getElementById('form-propuesta').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = document.getElementById('mensaje');
+            const body = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                creator_name: document.getElementById('creator_name').value,
+            };
+            try {
+                const res = await fetch(`${API}/proposals/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    window.location.href = `propuesta.html?id=${data.id}`;
+                } else {
+                    msg.innerHTML = `<div class="alerta error">${data.detail}</div>`;
+                }
+            } catch {
+                msg.innerHTML = '<div class="alerta error">No se pudo conectar con el servidor.</div>';
+            }
+        });
+    </script>
+</body>
+</html>

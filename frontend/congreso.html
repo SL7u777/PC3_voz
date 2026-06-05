@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel del Congreso - Voz del Ciudadano</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Voz del Ciudadano</h1>
+        <nav>
+            <a href="index.html">Inicio</a>
+            <a href="crear.html">Nueva Propuesta</a>
+            <a href="congreso.html">Panel del Congreso</a>
+        </nav>
+    </header>
+    <main>
+        <h2>Panel del Congreso — Propuestas Congeladas</h2>
+        <p style="color:#a0aec0;margin-bottom:24px;font-size:0.9rem">
+            Iniciativas legislativas que alcanzaron el umbral de firmas y fueron adaptadas al formato oficial del Congreso.
+        </p>
+        <div id="contenido"><p>Cargando...</p></div>
+    </main>
+    <script>
+        const API = 'http://localhost:8000';
+
+        async function cargar() {
+            const cont = document.getElementById('contenido');
+            try {
+                const res = await fetch(`${API}/proposals/`);
+                const todas = await res.json();
+                const congeladas = todas.filter(p => p.status === 'congelada');
+
+                if (!congeladas.length) {
+                    cont.innerHTML = '<p style="color:#a0aec0">Ninguna propuesta ha alcanzado el umbral de firmas aún.</p>';
+                    return;
+                }
+
+                const documentos = await Promise.all(
+                    congeladas.map(p => fetch(`${API}/proposals/${p.id}/congreso`).then(r => r.json()))
+                );
+
+                cont.innerHTML = documentos.map(doc => `
+                    <div class="congreso-card">
+                        <div class="campo">
+                            <div class="etiqueta">Número de Iniciativa</div>
+                            <div class="valor"><strong>${doc.numero_iniciativa}</strong></div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Denominación</div>
+                            <div class="valor">${doc.denominacion}</div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Exposición de Motivos</div>
+                            <div class="valor">${doc.exposicion_motivos}</div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Proponente</div>
+                            <div class="valor">${doc.proponente}</div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Firmas Validadas</div>
+                            <div class="valor">${doc.firmas_validadas.toLocaleString()}</div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Fecha de Presentación</div>
+                            <div class="valor">${new Date(doc.fecha_presentacion).toLocaleDateString('es-PE')}</div>
+                        </div>
+                        <div class="campo">
+                            <div class="etiqueta">Código de Integridad (SHA-256)</div>
+                            <div class="hash">${doc.codigo_integridad}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {
+                cont.innerHTML = '<p class="alerta error">No se pudo conectar con el servidor.</p>';
+            }
+        }
+
+        cargar();
+    </script>
+</body>
+</html>
