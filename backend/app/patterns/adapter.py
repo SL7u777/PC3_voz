@@ -19,10 +19,27 @@ class FormatoCongreso:
         self.firmas_validadas: int = 0
         self.codigo_integridad: str = ""
         self.fecha_presentacion: str = ""
+        self.comision_asignada: str = ""
 
 class CongresoAdapter:
     def __init__(self, fuente: FormatoInterno):
         self._fuente = fuente
+
+    def _asignar_comision(self, titulo: str) -> str:
+        t = titulo.lower()
+        if any(k in t for k in ["agua", "ambiente", "ecolog", "natural", "climat"]):
+            return "Comisión de Pueblos, Ambiente y Ecología"
+        if any(k in t for k in ["educac", "escuela", "universid", "enseñ"]):
+            return "Comisión de Educación, Juventud y Deporte"
+        if any(k in t for k in ["salud", "hospital", "médic", "sanidad"]):
+            return "Comisión de Salud y Población"
+        if any(k in t for k in ["transport", "vial", "carretera", "infraestructur"]):
+            return "Comisión de Transportes y Comunicaciones"
+        if any(k in t for k in ["trabajo", "laboral", "empleo", "sindic"]):
+            return "Comisión de Trabajo y Seguridad Social"
+        if any(k in t for k in ["seguridad", "policial", "orden público"]):
+            return "Comisión de Defensa Nacional y Orden Interno"
+        return "Comisión de Constitución y Reglamento"
 
     def adaptar(self) -> FormatoCongreso:
         doc = FormatoCongreso()
@@ -37,6 +54,7 @@ class CongresoAdapter:
             if isinstance(self._fuente.created_at, datetime)
             else str(self._fuente.created_at)
         )
+        doc.comision_asignada = self._asignar_comision(self._fuente.title)
         return doc
 
     def adaptar_a_dict(self) -> dict:
@@ -49,4 +67,5 @@ class CongresoAdapter:
             "firmas_validadas": doc.firmas_validadas,
             "codigo_integridad": doc.codigo_integridad,
             "fecha_presentacion": doc.fecha_presentacion,
+            "comision_asignada": doc.comision_asignada,
         }

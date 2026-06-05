@@ -125,10 +125,14 @@
                     </form>
                     <div id="msg-comentario"></div>
                 </div>
-                ` : `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más cambios.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>`}
+                ` : `
+                ${p.status === 'congelada' ? `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más cambios.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>` : ''}
+                ${p.status === 'expirada' ? `<div class="seccion"><p style="color:#f6ad55">Esta propuesta expiró sin alcanzar las 25,000 firmas en el plazo de 90 días.</p></div>` : ''}
+                `}
             `;
 
-            if (!congelada) {
+            const activa = p.status === 'activa';
+            if (activa) {
                 document.getElementById('form-firma').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const res = await fetch(`${API}/proposals/${id}/firmas`, {

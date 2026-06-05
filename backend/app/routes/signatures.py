@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -14,6 +15,10 @@ def firmar_propuesta(propuesta_id: int, data: SignatureCreate, db: Session = Dep
     propuesta = db.query(Proposal).filter(Proposal.id == propuesta_id).first()
     if not propuesta:
         raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    if propuesta.status == "activa" and datetime.utcnow() > propuesta.deadline:
+        propuesta.status = "expirada"
+        db.commit()
 
     proxy = DocumentoProxy({"status": propuesta.status})
     try:

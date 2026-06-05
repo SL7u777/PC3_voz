@@ -31,12 +31,17 @@ class DocumentoProxy(DocumentInterface):
         return self._real.leer()
 
     def modificar(self, datos: dict) -> dict:
-        if self._estado == "congelada":
+        if self._estado in ("congelada", "expirada"):
             self._intentos_bloqueados.append({
                 "datos_intentados": datos,
                 "hora": datetime.utcnow().isoformat()
             })
-            raise PermissionError("La propuesta está congelada y no puede modificarse.")
+            mensaje = (
+                "La propuesta está congelada y no puede modificarse."
+                if self._estado == "congelada"
+                else "La propuesta expiró sin alcanzar las firmas requeridas."
+            )
+            raise PermissionError(mensaje)
         return self._real.modificar(datos)
 
     def get_intentos_bloqueados(self) -> list:

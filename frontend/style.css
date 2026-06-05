@@ -46,6 +46,7 @@ h3 { color: #4f8ef7; margin-bottom: 8px; }
 
 .card.congelada { border-color: #805ad5; }
 .card.activa { border-color: #2d3154; }
+.card.expirada { border-color: #c05621; opacity: 0.75; }
 
 .card a { color: #4f8ef7; text-decoration: none; }
 .card a:hover { text-decoration: underline; }
@@ -125,6 +126,7 @@ button.peligro:hover { background: #6b46c1; }
 
 .tag.activa { background: #1c3a6e; color: #4f8ef7; }
 .tag.congelada { background: #3b2a6e; color: #b794f4; }
+.tag.expirada { background: #4a1c0a; color: #f6ad55; }
 
 .hash {
     font-family: monospace;

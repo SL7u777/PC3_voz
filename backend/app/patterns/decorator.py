@@ -39,5 +39,9 @@ class FirmasDecorator(ProposalDecorator):
 class EstadoDecorator(ProposalDecorator):
     def get_data(self) -> dict:
         data = self._propuesta.get_data()
-        data["estado_legible"] = "Congelada - Enviada al Congreso" if data.get("status") == "congelada" else "Activa - Recolectando firmas"
+        estados = {
+            "congelada": "Congelada - Enviada al Congreso",
+            "expirada": "Expirada - Plazo vencido sin alcanzar firmas",
+        }
+        data["estado_legible"] = estados.get(data.get("status"), "Activa - Recolectando firmas")
         return data
