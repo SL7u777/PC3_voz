@@ -23,16 +23,25 @@
         if (!id) window.location.href = 'index.html';
 
         async function cargar() {
-            const [resProp, resAdj, resMod] = await Promise.all([
-                fetch(`${API}/proposals/${id}`),
-                fetch(`${API}/proposals/${id}/adjuntos`),
-                fetch(`${API}/proposals/${id}/modificaciones`)
-            ]);
-            if (!resProp.ok) { document.getElementById('detalle').innerHTML = '<p class="alerta error">Propuesta no encontrada.</p>'; return; }
-            const p = await resProp.json();
-            const adjuntos = await resAdj.json();
-            const modificaciones = await resMod.json();
-            renderDetalle(p, adjuntos, modificaciones);
+            try {
+                const [resProp, resAdj, resMod, resCom] = await Promise.all([
+                    fetch(`${API}/proposals/${id}`),
+                    fetch(`${API}/proposals/${id}/adjuntos`),
+                    fetch(`${API}/proposals/${id}/modificaciones`),
+                    fetch(`${API}/proposals/${id}/comentarios`)
+                ]);
+                if (!resProp.ok) {
+                    document.getElementById('detalle').innerHTML = '<p class="alerta error">Propuesta no encontrada.</p>';
+                    return;
+                }
+                const p = await resProp.json();
+                const adjuntos = resAdj.ok ? await resAdj.json() : [];
+                const modificaciones = resMod.ok ? await resMod.json() : [];
+                const comentarios = resCom.ok ? await resCom.json() : [];
+                renderDetalle(p, adjuntos, modificaciones, comentarios);
+            } catch(err) {
+                document.getElementById('detalle').innerHTML = '<p class="alerta error">No se pudo conectar con el servidor.</p>';
+            }
         }
 
         function iconoArchivo(tipo) {
@@ -43,15 +52,42 @@
             return '📎';
         }
 
-        function renderDetalle(p, adjuntos, modificaciones) {
+        function renderDetalle(p, adjuntos, modificaciones, comentarios) {
+            const activa = p.status === 'activa';
             const congelada = p.status === 'congelada';
+            const expirada = p.status === 'expirada';
+
+            function renderContenidoArchivo(a, uid) {
+                const url = `http://localhost:8000/uploads/${id}/${a.filename}`;
+                let contenido = '';
+                if (a.file_type.includes('image')) {
+                    contenido = `<img src="${url}" alt="${a.filename}" style="max-width:100%;border-radius:6px;margin-top:8px;display:block">`;
+                } else if (a.file_type.includes('video')) {
+                    contenido = `<video controls style="max-width:100%;margin-top:8px;border-radius:6px"><source src="${url}" type="${a.file_type}"></video>`;
+                } else if (a.file_type.includes('audio')) {
+                    contenido = `<audio controls style="width:100%;margin-top:8px"><source src="${url}" type="${a.file_type}"></audio>`;
+                } else if (a.file_type.includes('pdf')) {
+                    contenido = `<a href="${url}" target="_blank" style="color:#4f8ef7;display:inline-block;margin-top:6px">📄 Abrir ${a.filename}</a>`;
+                }
+                return `<div id="preview-${uid}" style="display:none">${contenido}</div>`;
+            }
 
             const listaAdjuntos = adjuntos.length
-                ? adjuntos.map(a => `<div class="item-lista">${iconoArchivo(a.file_type)} <strong>${a.filename}</strong> <span style="color:#718096;font-size:0.8rem">${a.file_type}</span></div>`).join('')
+                ? adjuntos.map((a, i) => {
+                    const uid = `adj-${i}`;
+                    return `
+                    <div class="item-lista">
+                        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="(function(){var d=document.getElementById('preview-${uid}');var b=document.getElementById('btn-${uid}');if(d.style.display==='none'){d.style.display='block';b.textContent='Ocultar ▲';}else{d.style.display='none';b.textContent='Ver archivo ▼';}})()">
+                            <span>${iconoArchivo(a.file_type)} <strong>${a.filename}</strong> <span style="color:#718096;font-size:0.8rem">${a.file_type}</span></span>
+                            <span id="btn-${uid}" style="color:#4f8ef7;font-size:0.8rem;white-space:nowrap;margin-left:12px">Ver archivo ▼</span>
+                        </div>
+                        ${renderContenidoArchivo(a, uid)}
+                    </div>`;
+                }).join('')
                 : '<p style="color:#718096;font-size:0.9rem">Sin adjuntos aún.</p>';
 
             const listaMods = modificaciones.length
-                ? modificaciones.map(m => `<div class="item-lista"><strong>${m.author}</strong> — Sección: ${m.section}<br><span style="color:#e0e0e0">${m.proposed_change}</span></div>`).join('')
+                ? modificaciones.map(m => `<div class="item-lista"><span style="color:#718096;font-size:0.8rem">Sección: ${m.section}</span><br><span style="color:#e0e0e0">${m.proposed_change}</span></div>`).join('')
                 : '<p style="color:#718096;font-size:0.9rem">Sin modificaciones propuestas.</p>';
 
             document.getElementById('detalle').innerHTML = `
@@ -65,119 +101,108 @@
                     </div>
                     <p>${p.signature_count} firmas &nbsp;|&nbsp; ${p.progreso_firmas}% &nbsp;|&nbsp; Faltan: ${p.firmas_restantes}</p>
                     ${congelada ? `<p style="margin-top:10px">Hash SHA-256:</p><div class="hash">${p.frozen_hash}</div>` : ''}
+                    ${expirada ? `<p style="color:#f6ad55;margin-top:10px">Esta propuesta expiró sin alcanzar las 25,000 firmas en 90 días.</p>` : ''}
                 </div>
 
-                ${p.estructura && p.estructura.elementos.length ? `
+                ${(adjuntos.length || modificaciones.length) ? `
                 <div class="seccion">
-                    <h3>Estructura de la propuesta (Composite) — ${p.estructura.total_elementos} elementos</h3>
-                    ${p.estructura.elementos.map(e => `<div class="item-lista">[${e.tipo}] ${e.contenido}</div>`).join('')}
+                    <h3>Resumen de actividad</h3>
+                    <div class="item-lista">✏️ ${modificaciones.length} modificación(es) propuesta(s)</div>
+                    <div class="item-lista">📄 ${adjuntos.length} recurso(s) adjunto(s)</div>
                 </div>` : ''}
 
                 <div class="seccion">
                     <h3>Recursos Adjuntos</h3>
                     ${listaAdjuntos}
-                    ${!congelada ? `
-                    <form id="form-adjunto" style="margin-top:16px">
-                        <label>Adjuntar archivo (PDF, imagen, video, audio)</label>
-                        <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mp3" required>
-                        <button type="submit">Subir Adjunto</button>
-                    </form>
-                    <div id="msg-adjunto"></div>` : ''}
                 </div>
 
                 <div class="seccion">
                     <h3>Modificaciones Propuestas</h3>
                     ${listaMods}
-                    ${!congelada ? `
-                    <form id="form-modificacion" style="margin-top:16px">
-                        <label>Tu nombre</label>
-                        <input type="text" id="mod_author" required>
-                        <label>Sección a modificar</label>
-                        <input type="text" id="mod_section" placeholder="Ej: Artículo 2, Considerando 1..." required>
-                        <label>Cambio propuesto</label>
-                        <textarea id="mod_change" rows="3" required></textarea>
-                        <button type="submit">Enviar Modificación</button>
-                    </form>
-                    <div id="msg-modificacion"></div>` : ''}
                 </div>
 
-                ${!congelada ? `
+                ${comentarios.length ? `
                 <div class="seccion">
-                    <h3>Firmar Propuesta</h3>
-                    <form id="form-firma">
-                        <label>Nombre completo</label>
-                        <input type="text" id="citizen_name" required>
-                        <label>DNI</label>
-                        <input type="text" id="citizen_id" maxlength="8" required>
-                        <button type="submit">Firmar</button>
-                    </form>
-                    <div id="msg-firma"></div>
-                </div>
+                    <h3>Comentarios</h3>
+                    ${comentarios.map(c => `<div class="item-lista"><strong>${c.author}</strong><br><span style="color:#e0e0e0">${c.content}</span><span style="color:#718096;font-size:0.78rem;margin-left:8px">${new Date(c.created_at).toLocaleDateString('es-PE')}</span></div>`).join('')}
+                </div>` : ''}
 
+                ${activa ? `
                 <div class="seccion">
-                    <h3>Agregar Comentario</h3>
-                    <form id="form-comentario">
-                        <label>Tu nombre</label>
-                        <input type="text" id="author_name" required>
-                        <label>Comentario</label>
-                        <textarea id="content" rows="3" required></textarea>
-                        <button type="submit">Enviar Comentario</button>
+                    <h3>Participar en esta propuesta</h3>
+                    <form id="form-participar">
+                        <label>Nombre completo *</label>
+                        <input type="text" id="citizen_name" placeholder="Requerido para registrar tu firma" required>
+                        <label>DNI *</label>
+                        <input type="text" id="citizen_id" maxlength="8" placeholder="Requerido para validar tu firma" required>
+                        <label>Comentario u opinión <span style="color:#718096;font-size:0.8rem">(opcional)</span></label>
+                        <textarea id="comment_content" rows="2" placeholder="Comparte tu opinión sobre esta propuesta..."></textarea>
+                        <label>Sección a modificar <span style="color:#718096;font-size:0.8rem">(opcional)</span></label>
+                        <input type="text" id="mod_section" placeholder="Ej: Artículo 2, Considerando 1...">
+                        <label>Cambio propuesto <span style="color:#718096;font-size:0.8rem">(opcional · anónimo — tu nombre no será visible)</span></label>
+                        <textarea id="mod_change" rows="3" placeholder="Tu propuesta de cambio se publicará de forma anónima..."></textarea>
+                        <label>Adjuntar recurso de apoyo <span style="color:#718096;font-size:0.8rem">(opcional — PDF, imagen, video, audio)</span></label>
+                        <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mp3">
+                        <button type="submit" style="margin-top:8px">Enviar participación</button>
                     </form>
-                    <div id="msg-comentario"></div>
-                </div>
-                ` : `
-                ${p.status === 'congelada' ? `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más cambios.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>` : ''}
-                ${p.status === 'expirada' ? `<div class="seccion"><p style="color:#f6ad55">Esta propuesta expiró sin alcanzar las 25,000 firmas en el plazo de 90 días.</p></div>` : ''}
-                `}
+                    <div id="msg-participar"></div>
+                </div>` : ''}
+
+                ${congelada ? `
+                <div class="seccion">
+                    <p style="color:#b794f4">Esta propuesta está congelada. No admite más cambios.</p>
+                    <a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a>
+                </div>` : ''}
             `;
 
-            const activa = p.status === 'activa';
             if (activa) {
-                document.getElementById('form-firma').addEventListener('submit', async (e) => {
+                document.getElementById('form-participar').addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const res = await fetch(`${API}/proposals/${id}/firmas`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ citizen_name: document.getElementById('citizen_name').value, citizen_id: document.getElementById('citizen_id').value })
-                    });
-                    const data = await res.json();
-                    const msg = document.getElementById('msg-firma');
-                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje} — Total: ${data.total_firmas}</div>`; cargar(); }
-                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
-                });
+                    const msg = document.getElementById('msg-participar');
+                    const nombre = document.getElementById('citizen_name').value;
+                    const dni = document.getElementById('citizen_id').value;
+                    const seccion = document.getElementById('mod_section').value.trim();
+                    const cambio = document.getElementById('mod_change').value.trim();
+                    const archivo = document.getElementById('archivo').files[0];
+                    const resultados = [];
 
-                document.getElementById('form-comentario').addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const res = await fetch(`${API}/proposals/${id}/comentarios`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ author_name: document.getElementById('author_name').value, content: document.getElementById('content').value })
-                    });
-                    const data = await res.json();
-                    const msg = document.getElementById('msg-comentario');
-                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}</div>`; cargar(); }
-                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
-                });
+                    const comentario = document.getElementById('comment_content').value.trim();
 
-                document.getElementById('form-adjunto').addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const formData = new FormData();
-                    formData.append('archivo', document.getElementById('archivo').files[0]);
-                    const res = await fetch(`${API}/proposals/${id}/adjuntos`, { method: 'POST', body: formData });
-                    const data = await res.json();
-                    const msg = document.getElementById('msg-adjunto');
-                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}: ${data.filename}</div>`; cargar(); }
-                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
-                });
-
-                document.getElementById('form-modificacion').addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const res = await fetch(`${API}/proposals/${id}/modificaciones`, {
+                    const resFirma = await fetch(`${API}/proposals/${id}/firmas`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ author_name: document.getElementById('mod_author').value, section: document.getElementById('mod_section').value, proposed_change: document.getElementById('mod_change').value })
+                        body: JSON.stringify({ citizen_name: nombre, citizen_id: dni })
                     });
-                    const data = await res.json();
-                    const msg = document.getElementById('msg-modificacion');
-                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}</div>`; cargar(); }
-                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
+                    const dataFirma = await resFirma.json();
+                    if (!resFirma.ok) { msg.innerHTML = `<div class="alerta error">${dataFirma.detail}</div>`; return; }
+                    resultados.push(`Firma registrada (total: ${dataFirma.total_firmas})`);
+
+                    if (comentario) {
+                        const resCom = await fetch(`${API}/proposals/${id}/comentarios`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ author_name: nombre, content: comentario })
+                        });
+                        if (resCom.ok) resultados.push('Comentario registrado');
+                    }
+
+                    if (seccion && cambio) {
+                        const resMod = await fetch(`${API}/proposals/${id}/modificaciones`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ author_name: nombre, section: seccion, proposed_change: cambio })
+                        });
+                        if (resMod.ok) resultados.push('Modificación registrada');
+                    }
+
+                    if (archivo) {
+                        const formData = new FormData();
+                        formData.append('archivo', archivo);
+                        const resAdj = await fetch(`${API}/proposals/${id}/adjuntos`, { method: 'POST', body: formData });
+                        const dataAdj = await resAdj.json();
+                        if (resAdj.ok) resultados.push(`Adjunto subido: ${dataAdj.filename}`);
+                        else resultados.push(`Adjunto: ${dataAdj.detail}`);
+                    }
+
+                    msg.innerHTML = `<div class="alerta exito">${resultados.join(' · ')}</div>`;
+                    cargar();
                 });
             }
         }

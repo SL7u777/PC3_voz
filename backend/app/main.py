@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.database import engine
 from app.database import Base
 from app.models import Proposal, Signature, Comment, Attachment, Modification
@@ -23,6 +24,7 @@ app.include_router(signatures.router)
 app.include_router(comments.router)
 app.include_router(attachments.router)
 app.include_router(modifications.router)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 def health_check():
