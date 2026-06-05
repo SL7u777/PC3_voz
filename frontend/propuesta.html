@@ -20,21 +20,39 @@
     <script>
         const API = 'http://localhost:8000';
         const id = new URLSearchParams(window.location.search).get('id');
-
         if (!id) window.location.href = 'index.html';
 
         async function cargar() {
-            const res = await fetch(`${API}/proposals/${id}`);
-            if (!res.ok) { document.getElementById('detalle').innerHTML = '<p class="alerta error">Propuesta no encontrada.</p>'; return; }
-            const p = await res.json();
-            renderDetalle(p);
+            const [resProp, resAdj, resMod] = await Promise.all([
+                fetch(`${API}/proposals/${id}`),
+                fetch(`${API}/proposals/${id}/adjuntos`),
+                fetch(`${API}/proposals/${id}/modificaciones`)
+            ]);
+            if (!resProp.ok) { document.getElementById('detalle').innerHTML = '<p class="alerta error">Propuesta no encontrada.</p>'; return; }
+            const p = await resProp.json();
+            const adjuntos = await resAdj.json();
+            const modificaciones = await resMod.json();
+            renderDetalle(p, adjuntos, modificaciones);
         }
 
-        function renderDetalle(p) {
+        function iconoArchivo(tipo) {
+            if (tipo.includes('pdf')) return '📄';
+            if (tipo.includes('video')) return '🎥';
+            if (tipo.includes('audio')) return '🎵';
+            if (tipo.includes('image')) return '🖼️';
+            return '📎';
+        }
+
+        function renderDetalle(p, adjuntos, modificaciones) {
             const congelada = p.status === 'congelada';
-            const estructura = p.estructura ? p.estructura.elementos.map(e =>
-                `<div class="item-lista">[${e.tipo}] ${e.contenido}</div>`
-            ).join('') : '';
+
+            const listaAdjuntos = adjuntos.length
+                ? adjuntos.map(a => `<div class="item-lista">${iconoArchivo(a.file_type)} <strong>${a.filename}</strong> <span style="color:#718096;font-size:0.8rem">${a.file_type}</span></div>`).join('')
+                : '<p style="color:#718096;font-size:0.9rem">Sin adjuntos aún.</p>';
+
+            const listaMods = modificaciones.length
+                ? modificaciones.map(m => `<div class="item-lista"><strong>${m.author}</strong> — Sección: ${m.section}<br><span style="color:#e0e0e0">${m.proposed_change}</span></div>`).join('')
+                : '<p style="color:#718096;font-size:0.9rem">Sin modificaciones propuestas.</p>';
 
             document.getElementById('detalle').innerHTML = `
                 <div class="seccion">
@@ -49,7 +67,39 @@
                     ${congelada ? `<p style="margin-top:10px">Hash SHA-256:</p><div class="hash">${p.frozen_hash}</div>` : ''}
                 </div>
 
-                ${estructura ? `<div class="seccion"><h3>Estructura de la propuesta (Composite)</h3>${estructura}</div>` : ''}
+                ${p.estructura && p.estructura.elementos.length ? `
+                <div class="seccion">
+                    <h3>Estructura de la propuesta (Composite) — ${p.estructura.total_elementos} elementos</h3>
+                    ${p.estructura.elementos.map(e => `<div class="item-lista">[${e.tipo}] ${e.contenido}</div>`).join('')}
+                </div>` : ''}
+
+                <div class="seccion">
+                    <h3>Recursos Adjuntos</h3>
+                    ${listaAdjuntos}
+                    ${!congelada ? `
+                    <form id="form-adjunto" style="margin-top:16px">
+                        <label>Adjuntar archivo (PDF, imagen, video, audio)</label>
+                        <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mp3" required>
+                        <button type="submit">Subir Adjunto</button>
+                    </form>
+                    <div id="msg-adjunto"></div>` : ''}
+                </div>
+
+                <div class="seccion">
+                    <h3>Modificaciones Propuestas</h3>
+                    ${listaMods}
+                    ${!congelada ? `
+                    <form id="form-modificacion" style="margin-top:16px">
+                        <label>Tu nombre</label>
+                        <input type="text" id="mod_author" required>
+                        <label>Sección a modificar</label>
+                        <input type="text" id="mod_section" placeholder="Ej: Artículo 2, Considerando 1..." required>
+                        <label>Cambio propuesto</label>
+                        <textarea id="mod_change" rows="3" required></textarea>
+                        <button type="submit">Enviar Modificación</button>
+                    </form>
+                    <div id="msg-modificacion"></div>` : ''}
+                </div>
 
                 ${!congelada ? `
                 <div class="seccion">
@@ -75,24 +125,14 @@
                     </form>
                     <div id="msg-comentario"></div>
                 </div>
-
-                <div class="seccion">
-                    <h3>Adjuntar Recurso (PDF, imagen, video, audio)</h3>
-                    <form id="form-adjunto">
-                        <input type="file" id="archivo" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mp3" required>
-                        <button type="submit">Subir Adjunto</button>
-                    </form>
-                    <div id="msg-adjunto"></div>
-                </div>
-                ` : `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más firmas, comentarios ni adjuntos.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>`}
+                ` : `<div class="seccion"><p style="color:#b794f4">Esta propuesta está congelada. No admite más cambios.</p><a href="congreso.html"><button class="peligro" style="margin-top:12px">Ver en Panel del Congreso</button></a></div>`}
             `;
 
             if (!congelada) {
                 document.getElementById('form-firma').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const res = await fetch(`${API}/proposals/${id}/firmas`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ citizen_name: document.getElementById('citizen_name').value, citizen_id: document.getElementById('citizen_id').value })
                     });
                     const data = await res.json();
@@ -104,8 +144,7 @@
                 document.getElementById('form-comentario').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const res = await fetch(`${API}/proposals/${id}/comentarios`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ author_name: document.getElementById('author_name').value, content: document.getElementById('content').value })
                     });
                     const data = await res.json();
@@ -122,6 +161,18 @@
                     const data = await res.json();
                     const msg = document.getElementById('msg-adjunto');
                     if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}: ${data.filename}</div>`; cargar(); }
+                    else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
+                });
+
+                document.getElementById('form-modificacion').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const res = await fetch(`${API}/proposals/${id}/modificaciones`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ author_name: document.getElementById('mod_author').value, section: document.getElementById('mod_section').value, proposed_change: document.getElementById('mod_change').value })
+                    });
+                    const data = await res.json();
+                    const msg = document.getElementById('msg-modificacion');
+                    if (res.ok) { msg.innerHTML = `<div class="alerta exito">${data.mensaje}</div>`; cargar(); }
                     else { msg.innerHTML = `<div class="alerta error">${data.detail}</div>`; }
                 });
             }

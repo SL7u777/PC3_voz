@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.database import Base
-from app.models import Proposal, Signature, Comment, Attachment
-from app.routes import proposals, signatures, comments, attachments
+from app.models import Proposal, Signature, Comment, Attachment, Modification
+from app.routes import proposals, signatures, comments, attachments, modifications
 
 Base.metadata.create_all(bind=engine)
 os.makedirs("uploads", exist_ok=True)
@@ -22,6 +22,7 @@ app.include_router(proposals.router)
 app.include_router(signatures.router)
 app.include_router(comments.router)
 app.include_router(attachments.router)
+app.include_router(modifications.router)
 
 @app.get("/")
 def health_check():
